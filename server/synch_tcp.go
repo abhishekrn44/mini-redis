@@ -1,11 +1,14 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"mini-redis/config"
+	"mini-redis/core"
 	"net"
 	"strconv"
+	"strings"
 )
 
 func StartSyncTCPServer() {
@@ -27,7 +30,7 @@ func StartSyncTCPServer() {
 		log.Println("Client connected with address ", connection.RemoteAddr())
 
 		for {
-			command, error := readCommand(connection)
+			command, error := ReadCommand(connection)
 
 			if error != nil {
 				connection.Close()
@@ -40,33 +43,40 @@ func StartSyncTCPServer() {
 
 			}
 
-			if error = respond(connection, command); error != nil {
-				log.Println("Error", error)
-			}
+			Respond(connection, command)
 		}
 	}
 
 }
 
-func readCommand(connection net.Conn) (string, error) {
+func ReadCommand(connection net.Conn) (*core.RedisCommand, error) {
 	var buff []byte = make([]byte, 512)
 
 	count, error := connection.Read(buff[:])
 
 	if error != nil {
-		return "", error
+		return nil, error
 	}
 
-	return string(buff[:count]), nil
-}
-
-func respond(connection net.Conn, command string) error {
-
-	_, error := connection.Write([]byte(command))
+	tokens, error := core.DecodeArrayString(buff[:count])
 
 	if error != nil {
-		return error
+		return nil, error
 	}
 
-	return nil
+	return &core.RedisCommand{
+		Command: strings.ToUpper(tokens[0]),
+		Args:    tokens[1:],
+	}, nil
+}
+
+func Respond(connection net.Conn, command *core.RedisCommand) {
+	err := core.EvaluateAndRespond(command, connection)
+	if err != nil {
+		RespondError(err, connection)
+	}
+}
+
+func RespondError(err error, c net.Conn) {
+	c.Write([]byte(fmt.Sprintf("-%s\r\n", err)))
 }
