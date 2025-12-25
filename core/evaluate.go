@@ -2,24 +2,26 @@ package core
 
 import (
 	"errors"
+	"io"
 	"log"
-	"net"
 )
 
-func EvaluateAndRespond(command *RedisCommand, conn net.Conn) error {
+func EvaluateAndRespond(command *RedisCommand, c io.ReadWriter) error {
 
 	log.Println("command :: ", command.Command)
 
 	switch command.Command {
 	case "PING":
-		return EvaluatePING(command.Args, conn)
+		return EvaluatePING(command.Args, c)
+	case "CLIENT":
+		return EvaluateCLIENT(command.Args, c)
 	default:
-		return EvaluatePING(command.Args, conn)
+		return EvaluatePING(command.Args, c)
 	}
 
 }
 
-func EvaluatePING(args []string, conn net.Conn) error {
+func EvaluatePING(args []string, c io.ReadWriter) error {
 	var buff []byte
 
 	if len(args) >= 2 {
@@ -32,6 +34,13 @@ func EvaluatePING(args []string, conn net.Conn) error {
 		buff = Encode(args[0], false)
 	}
 
-	_, err := conn.Write(buff)
+	_, err := c.Write(buff)
+	return err
+}
+
+func EvaluateCLIENT(args []string, c io.ReadWriter) error {
+	var buff []byte = Encode("OK", true)
+
+	_, err := c.Write(buff)
 	return err
 }

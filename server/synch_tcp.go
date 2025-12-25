@@ -12,7 +12,7 @@ import (
 )
 
 func StartSyncTCPServer() {
-	log.Println("TCP Server starting", config.Host, config.Port)
+	log.Println("TCP Server starting", config.Host+":"+strconv.Itoa(config.Port))
 
 	listener, error := net.Listen("tcp", config.Host+":"+strconv.Itoa(config.Port))
 
@@ -43,22 +43,56 @@ func StartSyncTCPServer() {
 
 			}
 
-			Respond(connection, command)
+			Respond(command, connection)
 		}
 	}
 
 }
 
-func ReadCommand(connection net.Conn) (*core.RedisCommand, error) {
+// func ReadCommand(connection net.Conn) (*core.RedisCommand, error) {
+// 	var buff []byte = make([]byte, 512)
+
+// 	count, error := connection.Read(buff[:])
+
+// 	if error != nil {
+// 		return nil, error
+// 	}
+
+// 	tokens, error := core.DecodeArrayString(buff[:count])
+
+// 	if error != nil {
+// 		return nil, error
+// 	}
+
+// 	return &core.RedisCommand{
+// 		Command: strings.ToUpper(tokens[0]),
+// 		Args:    tokens[1:],
+// 	}, nil
+// }
+
+// func Respond(connection net.Conn, command *core.RedisCommand) {
+// 	err := core.EvaluateAndRespond(command, connection)
+// 	if err != nil {
+// 		RespondError(err, connection)
+// 	}
+// }
+
+// func RespondError(err error, c net.Conn) {
+// 	c.Write([]byte(fmt.Sprintf("-%s\r\n", err)))
+// }
+
+func ReadCommand(c io.ReadWriter) (*core.RedisCommand, error) {
 	var buff []byte = make([]byte, 512)
 
-	count, error := connection.Read(buff[:])
+	count, error := c.Read(buff[:])
 
 	if error != nil {
 		return nil, error
 	}
 
 	tokens, error := core.DecodeArrayString(buff[:count])
+
+	log.Println("cmd", tokens)
 
 	if error != nil {
 		return nil, error
@@ -70,13 +104,13 @@ func ReadCommand(connection net.Conn) (*core.RedisCommand, error) {
 	}, nil
 }
 
-func Respond(connection net.Conn, command *core.RedisCommand) {
-	err := core.EvaluateAndRespond(command, connection)
+func Respond(command *core.RedisCommand, c io.ReadWriter) {
+	err := core.EvaluateAndRespond(command, c)
 	if err != nil {
-		RespondError(err, connection)
+		RespondError(err, c)
 	}
 }
 
-func RespondError(err error, c net.Conn) {
+func RespondError(err error, c io.ReadWriter) {
 	c.Write([]byte(fmt.Sprintf("-%s\r\n", err)))
 }
