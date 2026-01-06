@@ -5,29 +5,31 @@ import (
 	"fmt"
 )
 
+var NilRESP []byte = []byte("$-1\r\n")
+
 func Decode(data []byte) (interface{}, error) {
 	if len(data) == 0 {
 		return nil, errors.New("no data")
 	}
 
-	value, _, error := DecodeOne(data)
+	value, _, error := decodeOne(data)
 
 	return value, error
 }
 
-func DecodeOne(data []byte) (interface{}, int, error) {
+func decodeOne(data []byte) (interface{}, int, error) {
 
 	switch data[0] {
 	case '+':
-		return ReadSimpleString(data)
+		return readSimpleString(data)
 	case '-':
-		return ReadError(data)
+		return readError(data)
 	case ':':
-		return ReadInt64(data)
+		return readInt64(data)
 	case '$':
-		return ReadBulkString(data)
+		return readBulkString(data)
 	case '*':
-		return ReadArray(data)
+		return readArray(data)
 
 	}
 
@@ -35,7 +37,7 @@ func DecodeOne(data []byte) (interface{}, int, error) {
 }
 
 // Reads a RESP encoded simple string from data and returns string, delta, and error.
-func ReadSimpleString(data []byte) (string, int, error) {
+func readSimpleString(data []byte) (string, int, error) {
 	// First character is +
 	pos := 1
 
@@ -44,11 +46,11 @@ func ReadSimpleString(data []byte) (string, int, error) {
 	return string(data[1:pos]), pos + 2, nil
 }
 
-func ReadError(data []byte) (string, int, error) {
-	return ReadSimpleString(data)
+func readError(data []byte) (string, int, error) {
+	return readSimpleString(data)
 }
 
-func ReadInt64(data []byte) (int64, int, error) {
+func readInt64(data []byte) (int64, int, error) {
 	// first character :
 	pos := 1
 	var value int64 = 0
@@ -60,13 +62,13 @@ func ReadInt64(data []byte) (int64, int, error) {
 	return value, pos + 2, nil
 }
 
-func ReadBulkString(data []byte) (string, int, error) {
+func readBulkString(data []byte) (string, int, error) {
 
 	// first character $
 	pos := 1
 
 	// reading the length and forwarding the pos by the lenth of the integer + the first special character
-	length, delta := ReadLength(data[pos:])
+	length, delta := readLength(data[pos:])
 	pos += delta
 
 	return string(data[pos:(pos + length)]), pos + length + 2, nil
@@ -76,7 +78,7 @@ func ReadBulkString(data []byte) (string, int, error) {
 // until hit by an non-digit byte and returns
 // the integer and the delta = length + 2 (CRLF)
 // TODO: Make it simpler and read until we get `\r` just like other functions
-func ReadLength(data []byte) (int, int) {
+func readLength(data []byte) (int, int) {
 	pos, length := 0, 0
 	for pos = range data {
 		b := data[pos]
@@ -90,17 +92,17 @@ func ReadLength(data []byte) (int, int) {
 
 // reads a RESP encoded array from data and returns
 // the array, the delta, and the error
-func ReadArray(data []byte) (interface{}, int, error) {
+func readArray(data []byte) (interface{}, int, error) {
 	// first character *
 	pos := 1
 
 	// reading the length
-	count, delta := ReadLength(data[pos:])
+	count, delta := readLength(data[pos:])
 	pos += delta
 
 	var elems []interface{} = make([]interface{}, count)
 	for i := range elems {
-		elem, delta, err := DecodeOne(data[pos:])
+		elem, delta, err := decodeOne(data[pos:])
 		if err != nil {
 			return nil, 0, err
 		}
@@ -117,8 +119,11 @@ func Encode(value interface{}, isSimpleString bool) []byte {
 			return []byte(fmt.Sprintf("+%s\r\n", v))
 		}
 		return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v))
+	case int64:
+		return []byte(fmt.Sprintf(":%d\r\n", v))
+	default:
+		return NilRESP
 	}
-	return []byte{}
 }
 
 func DecodeArrayString(data []byte) ([]string, error) {

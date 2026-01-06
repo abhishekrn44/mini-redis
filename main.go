@@ -16,5 +16,6 @@ func configValues() {
 func main() {
 	configValues()
 	log.Println("Starting mini-redis")
+	// core.Create()
 	server.StartAsyncTCPServer()
 }
