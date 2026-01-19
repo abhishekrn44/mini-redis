@@ -31,5 +31,24 @@ func Put(key string, newObject *Obj) {
 }
 
 func Get(k string) *Obj {
-	return store[k]
+
+	v := store[k]
+
+	if v != nil {
+		if v.Expiry <= time.Now().UnixMilli() {
+			delete(store, k)
+			return nil
+		}
+	}
+
+	return v
+}
+
+func DeleteKey(k string) bool {
+	_, ok := store[k]
+	if ok {
+		delete(store, k)
+		return true
+	}
+	return false
 }

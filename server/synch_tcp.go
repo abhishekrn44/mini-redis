@@ -82,7 +82,7 @@ func StartSyncTCPServer() {
 // }
 
 func ReadCommand(c io.ReadWriter) (*core.RedisCommand, error) {
-	var buff []byte = make([]byte, 5012)
+	var buff []byte = make([]byte, 512)
 
 	count, error := c.Read(buff[:])
 

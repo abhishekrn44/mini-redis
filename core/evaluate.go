@@ -23,10 +23,14 @@ func EvaluateAndRespond(command *RedisCommand, c io.ReadWriter) error {
 		return evaluateGET(command.Args, c)
 	case "TTL":
 		return evaluateTTL(command.Args, c)
+	case "DEL":
+		return evaluateDEL(command.Args, c)
+	case "EXPIRE":
+		return evaluateEXPIRE(command.Args, c)
 	case "CLIENT":
-		return evaluateCLIENT(command.Args, c)
+		return evaluateCLIENT(c)
 	default:
-		return unknownCommand(command, c)
+		return unknownCommand(command)
 	}
 
 }
@@ -94,19 +98,19 @@ func evaluateTTL(args []string, c io.ReadWriter) error {
 
 	// return RESP -2 if the key does not exist.
 	if obj == nil {
-		c.Write(Encode(int64(-2), false))
+		c.Write(Encode(-2, false))
 		return nil
 	}
 
 	// return RESP -1 if the key exists but has no associated expiration.
 	if obj.Expiry == -1 {
-		c.Write(Encode(int64(-1), false))
+		c.Write(Encode(-1, false))
 		return nil
 	}
 
 	// Key remaining time
 	durationMs := obj.Expiry - time.Now().UnixMilli()
-	c.Write(Encode(int64(durationMs/1000), false))
+	c.Write(Encode(durationMs/1000, false))
 	return nil
 }
 
@@ -134,7 +138,7 @@ func evaluateGET(args []string, c io.ReadWriter) error {
 	return nil
 }
 
-func unknownCommand(cmd *RedisCommand, c io.ReadWriter) error {
+func unknownCommand(cmd *RedisCommand) error {
 	if len(cmd.Args) == 0 {
 		return fmt.Errorf("ERR unknown command '%s', with args beginning with:", cmd.Command)
 	} else {
@@ -146,8 +150,55 @@ func unknownCommand(cmd *RedisCommand, c io.ReadWriter) error {
 	}
 }
 
-func evaluateCLIENT(args []string, c io.ReadWriter) error {
+func evaluateCLIENT(c io.ReadWriter) error {
 	var buff []byte = Encode("OK", true)
 	_, err := c.Write(buff)
 	return err
+}
+
+func evaluateDEL(args []string, c io.ReadWriter) error {
+
+	if len(args) == 0 {
+		return errors.New("ERR wrong number of arguments for 'del' command")
+	}
+
+	delCount := 0
+
+	for _, key := range args {
+		if res := DeleteKey(key); res {
+			delCount++
+		}
+	}
+
+	c.Write(Encode(delCount, false))
+	return nil
+}
+
+func evaluateEXPIRE(args []string, c io.ReadWriter) error {
+
+	if len(args) != 2 {
+		return errors.New("ERR wrong number of arguments for 'expire' command")
+	}
+
+	key := args[0]
+
+	secs, err := strconv.ParseInt(args[1], 10, 64)
+
+	if err != nil {
+		return errors.New("(error) ERR value is not an integer or out of range")
+	}
+
+	obj := Get(key)
+
+	// return integet 0 if the timeout was not set; for example, the key doesn't exist, or the operation was skipped because of the provided arguments.
+	if obj == nil {
+		c.Write([]byte(":0\r\n"))
+		return nil
+	}
+
+	obj.Expiry = time.Now().UnixMilli() + secs*1000
+
+	// return integer 1 if the timeout was set.
+	c.Write([]byte(":1\r\n"))
+	return nil
 }
